@@ -29,7 +29,7 @@ jobs:
         working-directory: src
         run: |
           mkdir -p out dist pkg_root/opt pkg_root/DEBIAN pkg_root/usr/local/bin release
-          curl -L -o dist/sqlite-jdbc.jar https://maven.org
+          curl -fSL -o dist/sqlite-jdbc.jar https://maven.org
 
           javac -d out --module-path /usr/share/openjfx/lib --add-modules javafx.controls \
             app/domain/*.java app/storage/*.java app/ui/controllers/*.java app/ui/views/*.java app/ui/*.java app/tests/*.java
