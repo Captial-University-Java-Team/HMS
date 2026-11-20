@@ -15,14 +15,34 @@ public class Doctor extends User {
         this.departmentId = departmentId;
     }
 
-    public boolean scheduleNewAppointment(LocalDateTime date) {
-        if (hasAppointmentAt(date)) return false;
-        appointments.add(new Appointment(date));
+    public boolean scheduleNewAppointment(Appointment newAppt) {
+        if (hasActiveAppointmentAt(newAppt.getDate())) return false;
+        appointments.add(newAppt);
         return true;
     }
 
-    private boolean hasAppointmentAt(LocalDateTime date) {
-        return appointments.stream().anyMatch(a -> a.getDate().equals(date));
+    private boolean hasActiveAppointmentAt(LocalDateTime date) {
+        for (Appointment appt : appointments) {
+            if (appt.getStatus() != AppointmentStatus.CANCELED && appt.getDate().equals(date)) {
+                return true; }
+        }
+        return false;
+    }
+  
+    
+    public boolean assignToDepartment(Department department) {
+        if (department == null || this.speciality == null) return false;
+        if (!this.speciality.equalsIgnoreCase(department.getRequiredSpeciality())) {
+            return false; 
+        }
+
+        this.departmentId = department.getId();
+        return true;
+    }
+
+    public void loadAppointments(List<Appointment> existing) {
+      appointments.clear();
+      appointments.addAll(existing);
     }
 
     public String getSpeciality() { return speciality; }

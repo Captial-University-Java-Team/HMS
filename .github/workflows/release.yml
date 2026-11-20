@@ -3,12 +3,13 @@ name: Build & Release HMS
 on:
   push:
     tags:
-      - 'v*' # Triggers whenever you push a tag like v1.0.0
+      - 'v*' # Triggers whenever you push a tag like v2.0.0
 
 permissions:
   contents: write
 
 env:
+  APP_VERSION: "2.0"
   MAVEN_HOST: repo1.maven.org
   SQLITE_PATH: maven2/org/xerial/sqlite-jdbc/3.47.1.0/sqlite-jdbc-3.47.1.0.jar
 
@@ -29,34 +30,36 @@ jobs:
           distribution: 'temurin'
           java-version: '24'
 
-      - name: Download SQLite JDBC, Run Tests & Build .deb
+      - name: Download SQLite JDBC, Run All Tests & Build .deb
         working-directory: src
         run: |
           mkdir -p out dist pkg_root/opt pkg_root/DEBIAN pkg_root/usr/local/bin release
           curl -fSL -o dist/sqlite-jdbc.jar "https://${MAVEN_HOST}/${SQLITE_PATH}"
-          ls -lh dist/sqlite-jdbc.jar
 
-          javac -d out --module-path /usr/share/openjfx/lib --add-modules javafx.controls \
-            app/domain/*.java app/storage/*.java app/ui/controllers/*.java app/ui/views/*.java app/ui/*.java app/tests/*.java
+          find app -name "*.java" > sources.txt
+          javac -d out --module-path /usr/share/openjfx/lib --add-modules javafx.controls @sources.txt
 
+          # Run all 3 test suites
           java -ea --enable-native-access=ALL-UNNAMED -cp out:dist/sqlite-jdbc.jar app.tests.AuthTest
+          java -ea --enable-native-access=ALL-UNNAMED -cp out:dist/sqlite-jdbc.jar app.tests.AppointmentTest
+          java -ea --enable-native-access=ALL-UNNAMED -cp out:dist/sqlite-jdbc.jar app.tests.FullHmsModulesTest
 
           jar --create --file dist/hms.jar --main-class app.ui.MainApp -C out .
 
-          jpackage --type app-image --name hms --app-version 1.0 \
+          jpackage --type app-image --name hms --app-version "${APP_VERSION}" \
             --input dist --main-jar hms.jar --main-class app.ui.MainApp \
             --module-path /usr/share/openjfx/lib --add-modules javafx.controls,java.sql \
             --java-options "--enable-native-access=ALL-UNNAMED" --dest pkg_root/opt/
 
-          printf "Package: hms\nVersion: 1.0\nSection: utils\nPriority: optional\nArchitecture: amd64\nMaintainer: Fouad\nDescription: Hospital Management System\n" > pkg_root/DEBIAN/control
+          printf "Package: hms\nVersion: ${APP_VERSION}\nSection: utils\nPriority: optional\nArchitecture: amd64\nMaintainer: Fouad\nDescription: Hospital Management System\n" > pkg_root/DEBIAN/control
           chmod 0755 pkg_root/DEBIAN
           ln -s /opt/hms/bin/hms pkg_root/usr/local/bin/hms
-          dpkg-deb -Zgzip --build pkg_root release/hms-linux-amd64.deb
+          dpkg-deb -Zgzip --build pkg_root "release/hms-${APP_VERSION}-linux-amd64.deb"
 
       - uses: actions/upload-artifact@v4
         with:
           name: linux-deb
-          path: src/release/hms-linux-amd64.deb
+          path: src/release/hms-2.0-linux-amd64.deb
 
   build-windows:
     runs-on: windows-latest
@@ -70,32 +73,34 @@ jobs:
           java-version: '24'
           java-package: 'jdk+fx'
 
-      - name: Download SQLite JDBC & Build Windows App
+      - name: Download SQLite JDBC, Run All Tests & Build Windows App
         working-directory: src
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path out, dist, release
           Invoke-WebRequest -Uri "https://$($env:MAVEN_HOST)/$($env:SQLITE_PATH)" -OutFile "dist/sqlite-jdbc.jar"
-          Get-Item "dist/sqlite-jdbc.jar" | Select-Object Name, Length
 
           $sources = Get-ChildItem -Recurse -Filter *.java app | ForEach-Object { $_.FullName }
           javac -d out $sources
 
+          # Run all 3 test suites
           java -ea --enable-native-access=ALL-UNNAMED -cp "out;dist/sqlite-jdbc.jar" app.tests.AuthTest
+          java -ea --enable-native-access=ALL-UNNAMED -cp "out;dist/sqlite-jdbc.jar" app.tests.AppointmentTest
+          java -ea --enable-native-access=ALL-UNNAMED -cp "out;dist/sqlite-jdbc.jar" app.tests.FullHmsModulesTest
 
           jar --create --file dist/hms.jar --main-class app.ui.MainApp -C out .
 
-          jpackage --type app-image --name HMS --app-version 1.0 `
+          jpackage --type app-image --name HMS --app-version $env:APP_VERSION `
             --input dist --main-jar hms.jar --main-class app.ui.MainApp `
             --add-modules javafx.controls,java.sql `
             --java-options "--enable-native-access=ALL-UNNAMED" --dest release/
 
-          Compress-Archive -Path release/HMS -DestinationPath release/HMS-windows-x64.zip
+          Compress-Archive -Path release/HMS -DestinationPath "release/HMS-$($env:APP_VERSION)-windows-x64.zip"
 
       - uses: actions/upload-artifact@v4
         with:
           name: windows-zip
-          path: src/release/HMS-windows-x64.zip
+          path: src/release/HMS-2.0-windows-x64.zip
 
   publish-release:
     needs: [build-linux, build-windows]
@@ -109,6 +114,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/linux-deb/hms-linux-amd64.deb
-            artifacts/windows-zip/HMS-windows-x64.zip
+            artifacts/linux-deb/hms-2.0-linux-amd64.deb
+            artifacts/windows-zip/HMS-2.0-windows-x64.zip
 
