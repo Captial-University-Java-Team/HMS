@@ -1,0 +1,107 @@
+name: Build & Release HMS
+
+on:
+  push:
+    tags:
+      - 'v*' # Triggers whenever you push a tag like v1.0.0
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OpenJFX & SQLite JDBC
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openjfx libxerial-sqlite-jdbc-java dpkg-dev
+
+      - name: Set up JDK 24
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '24'
+
+      - name: Run Tests & Build .deb
+        working-directory: src
+        run: |
+          mkdir -p out dist pkg_root/opt pkg_root/DEBIAN pkg_root/usr/local/bin release
+          javac -d out --module-path /usr/share/openjfx/lib --add-modules javafx.controls \
+            app/domain/*.java app/storage/*.java app/ui/controllers/*.java app/ui/views/*.java app/ui/*.java app/tests/*.java
+
+          java -ea --enable-native-access=ALL-UNNAMED -cp out:/usr/share/java/sqlite-jdbc.jar app.tests.AuthTest
+
+          jar --create --file dist/hms.jar --main-class app.ui.MainApp -C out .
+          cp /usr/share/java/sqlite-jdbc.jar dist/
+
+          jpackage --type app-image --name hms --app-version 1.0 \
+            --input dist --main-jar hms.jar --main-class app.ui.MainApp \
+            --module-path /usr/share/openjfx/lib --add-modules javafx.controls,java.sql \
+            --java-options "--enable-native-access=ALL-UNNAMED" --dest pkg_root/opt/
+
+          printf "Package: hms\nVersion: 1.0\nSection: utils\nPriority: optional\nArchitecture: amd64\nMaintainer: Fouad\nDescription: Hospital Management System\n" > pkg_root/DEBIAN/control
+          chmod 0755 pkg_root/DEBIAN
+          ln -s /opt/hms/bin/hms pkg_root/usr/local/bin/hms
+          dpkg-deb -Zgzip --build pkg_root release/hms-linux-amd64.deb
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-deb
+          path: src/release/hms-linux-amd64.deb
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 24 with JavaFX
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'liberica'
+          java-version: '24'
+          java-package: 'jdk+fx'
+
+      - name: Download SQLite JDBC & Build Windows App
+        working-directory: src
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path out, dist, release
+          Invoke-WebRequest -Uri "https://maven.org" -OutFile "dist/sqlite-jdbc.jar"
+
+          $sources = Get-ChildItem -Recurse -Filter *.java app | ForEach-Object { $_.FullName }
+          javac -d out $sources
+
+          java -ea --enable-native-access=ALL-UNNAMED -cp "out;dist/sqlite-jdbc.jar" app.tests.AuthTest
+
+          jar --create --file dist/hms.jar --main-class app.ui.MainApp -C out .
+
+          jpackage --type app-image --name HMS --app-version 1.0 `
+            --input dist --main-jar hms.jar --main-class app.ui.MainApp `
+            --add-modules javafx.controls,java.sql `
+            --java-options "--enable-native-access=ALL-UNNAMED" --dest release/
+
+          Compress-Archive -Path release/HMS -DestinationPath release/HMS-windows-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-zip
+          path: src/release/HMS-windows-x64.zip
+
+  publish-release:
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/linux-deb/hms-linux-amd64.deb
+            artifacts/windows-zip/HMS-windows-x64.zip
+

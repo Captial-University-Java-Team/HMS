@@ -1,0 +1,16 @@
+# Build & packaging directories
+out/
+dist/
+pkg_root/
+release/
+
+# Local SQLite database & data files
+data/
+*.db
+
+# Compiled Java & IDE files
+*.class
+*.jar
+.classpath
+.project
+.settings/
