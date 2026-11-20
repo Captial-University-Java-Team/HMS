@@ -8,6 +8,9 @@ on:
 permissions:
   contents: write
 
+env:
+  SQLITE_JAR_URL: https://maven.org
+
 jobs:
   build-linux:
     runs-on: ubuntu-latest
@@ -29,7 +32,8 @@ jobs:
         working-directory: src
         run: |
           mkdir -p out dist pkg_root/opt pkg_root/DEBIAN pkg_root/usr/local/bin release
-          curl -fSL -o dist/sqlite-jdbc.jar https://maven.org
+          curl -fSL -o dist/sqlite-jdbc.jar "$SQLITE_JAR_URL"
+          ls -lh dist/sqlite-jdbc.jar
 
           javac -d out --module-path /usr/share/openjfx/lib --add-modules javafx.controls \
             app/domain/*.java app/storage/*.java app/ui/controllers/*.java app/ui/views/*.java app/ui/*.java app/tests/*.java
@@ -70,7 +74,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path out, dist, release
-          Invoke-WebRequest -Uri "https://maven.org" -OutFile "dist/sqlite-jdbc.jar"
+          Invoke-WebRequest -Uri $env:SQLITE_JAR_URL -OutFile "dist/sqlite-jdbc.jar"
+          Get-Item "dist/sqlite-jdbc.jar" | Select-Object Name, Length
 
           $sources = Get-ChildItem -Recurse -Filter *.java app | ForEach-Object { $_.FullName }
           javac -d out $sources
