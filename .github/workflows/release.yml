@@ -14,10 +14,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install OpenJFX & SQLite JDBC
+      - name: Install OpenJFX & dpkg-dev
         run: |
           sudo apt-get update
-          sudo apt-get install -y openjfx libxerial-sqlite-jdbc-java dpkg-dev
+          sudo apt-get install -y openjfx dpkg-dev
 
       - name: Set up JDK 24
         uses: actions/setup-java@v4
@@ -25,17 +25,18 @@ jobs:
           distribution: 'temurin'
           java-version: '24'
 
-      - name: Run Tests & Build .deb
+      - name: Download SQLite JDBC, Run Tests & Build .deb
         working-directory: src
         run: |
           mkdir -p out dist pkg_root/opt pkg_root/DEBIAN pkg_root/usr/local/bin release
+          curl -L -o dist/sqlite-jdbc.jar https://maven.org
+
           javac -d out --module-path /usr/share/openjfx/lib --add-modules javafx.controls \
             app/domain/*.java app/storage/*.java app/ui/controllers/*.java app/ui/views/*.java app/ui/*.java app/tests/*.java
 
-          java -ea --enable-native-access=ALL-UNNAMED -cp out:/usr/share/java/sqlite-jdbc.jar app.tests.AuthTest
+          java -ea --enable-native-access=ALL-UNNAMED -cp out:dist/sqlite-jdbc.jar app.tests.AuthTest
 
           jar --create --file dist/hms.jar --main-class app.ui.MainApp -C out .
-          cp /usr/share/java/sqlite-jdbc.jar dist/
 
           jpackage --type app-image --name hms --app-version 1.0 \
             --input dist --main-jar hms.jar --main-class app.ui.MainApp \
