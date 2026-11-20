@@ -9,7 +9,8 @@ permissions:
   contents: write
 
 env:
-  SQLITE_JAR_URL: https://maven.org
+  MAVEN_HOST: repo1.maven.org
+  SQLITE_PATH: maven2/org/xerial/sqlite-jdbc/3.47.1.0/sqlite-jdbc-3.47.1.0.jar
 
 jobs:
   build-linux:
@@ -32,7 +33,7 @@ jobs:
         working-directory: src
         run: |
           mkdir -p out dist pkg_root/opt pkg_root/DEBIAN pkg_root/usr/local/bin release
-          curl -fSL -o dist/sqlite-jdbc.jar "$SQLITE_JAR_URL"
+          curl -fSL -o dist/sqlite-jdbc.jar "https://${MAVEN_HOST}/${SQLITE_PATH}"
           ls -lh dist/sqlite-jdbc.jar
 
           javac -d out --module-path /usr/share/openjfx/lib --add-modules javafx.controls \
@@ -74,7 +75,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path out, dist, release
-          Invoke-WebRequest -Uri $env:SQLITE_JAR_URL -OutFile "dist/sqlite-jdbc.jar"
+          Invoke-WebRequest -Uri "https://$($env:MAVEN_HOST)/$($env:SQLITE_PATH)" -OutFile "dist/sqlite-jdbc.jar"
           Get-Item "dist/sqlite-jdbc.jar" | Select-Object Name, Length
 
           $sources = Get-ChildItem -Recurse -Filter *.java app | ForEach-Object { $_.FullName }
